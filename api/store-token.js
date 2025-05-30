@@ -1,51 +1,79 @@
-const TOKEN_BLOB_NAME = 'tokens-LQF9Q9VAixdVmmKbTzpT3P63EOjiDq.json';
+const TOKEN_BLOB_NAME = 'tokens-LQF9Q9VAixdVmmKbTzpT3P63EOjiDq.json'; // your real blob name here
+const crypto = require('crypto');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   try {
-    const blobModule = await import('@vercel/blob');
+    const { Blob } = await import('@vercel/blob');
 
-    const body = await jsonBody(req);
+    // Parse JSON body safely
+    const body = await getJsonBody(req);
     const { token } = body;
     if (!token) return res.status(400).json({ error: 'Token required' });
 
+    // Read existing tokens from blob
     let tokens = [];
     try {
-      const blob = await blobModule.Blob.get(TOKEN_BLOB_NAME);
+      const blob = await Blob.get(TOKEN_BLOB_NAME);
       const text = await blob.text();
       tokens = JSON.parse(text);
     } catch {
-      // If no tokens.json found, create empty array (or return error)
+      // If blob not found or empty, start fresh
       tokens = [];
     }
 
-    const tokenObj = tokens.find(t => t.token === token);
-    if (!tokenObj) return res.status(404).json({ error: 'Token invalid' });
+    // Check if token already exists
+    if (tokens.some(t => t.token === token)) {
+      return res.status(409).json({ error: 'Token already stored' });
+    }
 
-    // Record user IP
-    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
-    tokenObj.ip = ip;
+    // Encrypt the token using AES-256-CBC with your .env key
+    const encrypted = encryptToken(token, process.env.ENCRYPTION_KEY);
 
-    // Update tokens blob
-    const newBlob = blobModule.Blob.from(JSON.stringify(tokens), TOKEN_BLOB_NAME, {
+    // Create token object to store
+    const tokenObj = {
+      token,
+      ip: '',
+      enctoken: encrypted,
+      status: 'unused',
+    };
+
+    tokens.push(tokenObj);
+
+    // Save updated tokens array back to blob
+    const newBlob = Blob.from(JSON.stringify(tokens), TOKEN_BLOB_NAME, {
       type: 'application/json',
     });
+    await Blob.put(TOKEN_BLOB_NAME, newBlob);
 
-    await blobModule.Blob.put(TOKEN_BLOB_NAME, newBlob);
-
-    res.status(200).json({ enctoken: tokenObj.enctoken });
+    res.status(201).json({ message: 'Token stored', enctoken: encrypted });
   } catch (e) {
-    console.error('Internal error:', e);
+    console.error(e);
     res.status(500).json({ error: 'Internal error' });
   }
 };
 
-async function jsonBody(req) {
+// Helper: Read JSON body from request
+async function getJsonBody(req) {
   const buffers = [];
   for await (const chunk of req) {
     buffers.push(chunk);
   }
   const data = Buffer.concat(buffers).toString();
   return JSON.parse(data);
+}
+
+// Helper: AES-256-CBC encrypt token string
+function encryptToken(token, keyHex) {
+  if (!keyHex || keyHex.length !== 64) {
+    throw new Error('Invalid encryption key length, must be 64 hex chars');
+  }
+  const key = Buffer.from(keyHex, 'hex');
+  const iv = crypto.randomBytes(16); // random IV
+  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+  let encrypted = cipher.update(token, 'utf8', 'base64');
+  encrypted += cipher.final('base64');
+  // Return IV + encrypted text (base64), separated by ':'
+  return iv.toString('base64') + ':' + encrypted;
 }
