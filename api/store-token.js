@@ -4,10 +4,16 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   try {
-    const { Blob } = await import('@vercel/blob');
+    // Check if Content-Type is application/json
+    if (req.headers['content-type'] !== 'application/json') {
+      return res.status(400).json({ error: 'Invalid Content-Type. Expected application/json' });
+    }
 
     const { token } = req.body;
+
     if (!token) return res.status(400).json({ error: 'Token required' });
+
+    const { Blob } = await import('@vercel/blob');
 
     let tokens = [];
     try {
@@ -15,7 +21,7 @@ module.exports = async function handler(req, res) {
       const text = await blob.text();
       tokens = JSON.parse(text);
     } catch {
-      // If blob not found, create it with new token
+      // If blob not found, initialize empty tokens array
       tokens = [];
     }
 
@@ -25,7 +31,7 @@ module.exports = async function handler(req, res) {
       return res.status(409).json({ error: 'Token already exists' });
     }
 
-    // Encrypt token (dummy method for now — use real encryption in prod)
+    // Encrypt token (dummy method for now — use real encryption in production)
     const enctoken = Buffer.from(token).toString('hex');
 
     tokens.push({
