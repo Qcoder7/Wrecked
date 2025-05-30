@@ -5,6 +5,7 @@ module.exports = async function handler(req, res) {
 
   try {
     const blobModule = await import('@vercel/blob');
+    const { put, get } = blobModule;
 
     const body = await jsonBody(req);
     const { token } = body;
@@ -12,7 +13,7 @@ module.exports = async function handler(req, res) {
 
     let tokens = [];
     try {
-      const blob = await blobModule.get(TOKEN_BLOB_NAME);
+      const blob = await get(TOKEN_BLOB_NAME);
       const text = await blob.text();
       tokens = JSON.parse(text);
     } catch {
@@ -22,6 +23,7 @@ module.exports = async function handler(req, res) {
     const existing = tokens.find(t => t.token === token);
     if (existing) return res.status(409).json({ error: 'Token already exists' });
 
+    // Simple encryption: reverse string (replace with your own logic)
     const enctoken = token.split('').reverse().join('');
 
     tokens.push({
@@ -31,7 +33,11 @@ module.exports = async function handler(req, res) {
       status: 'unused',
     });
 
-    await blobModule.put(TOKEN_BLOB_NAME, JSON.stringify(tokens));
+    // Use put to update the tokens.json blob
+    await put(TOKEN_BLOB_NAME, JSON.stringify(tokens), {
+      access: 'public',
+      type: 'application/json',
+    });
 
     res.status(200).json({ message: 'Token stored', enctoken });
   } catch (e) {
@@ -48,4 +54,3 @@ async function jsonBody(req) {
   const data = Buffer.concat(buffers).toString();
   return JSON.parse(data);
 }
-
