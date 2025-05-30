@@ -1,47 +1,24 @@
-export const config = {
-  runtime: 'edge',
-};
+export const config = { runtime: 'edge' };
+
+const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 
 export default async function handler(req) {
-  if (req.method !== 'POST') {
-    return new Response('Method Not Allowed', { status: 405 });
-  }
+  if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
 
   try {
-    const { content } = await req.json();
-    if (!content) {
-      return new Response(JSON.stringify({ error: 'Content required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
+    const data = await req.json();
+    if (!data.content) return new Response(JSON.stringify({ error: 'Content required' }), { status: 400 });
 
-    const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
-    if (!webhookUrl) {
-      return new Response(JSON.stringify({ error: 'Webhook URL not configured' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    const response = await fetch(webhookUrl, {
+    const res = await fetch(DISCORD_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content: data.content }),
     });
 
-    if (!response.ok) {
-      throw new Error(`Discord webhook error: ${response.statusText}`);
-    }
+    if (!res.ok) return new Response(JSON.stringify({ error: 'Failed to send' }), { status: 500 });
 
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch (e) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  } catch {
+    return new Response(JSON.stringify({ error: 'Internal error' }), { status: 500 });
   }
 }
