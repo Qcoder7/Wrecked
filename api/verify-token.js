@@ -1,39 +1,41 @@
-import { list, get, put } from '@vercel/blob';
-import crypto from 'crypto';
+import { readFile, writeFile } from 'fs/promises';
+import path from 'path';
 
-export const config = { runtime: 'edge' };
+const dataDir = path.resolve('./data/tokens');
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
-const IV_LENGTH = 16;
-
-function getIP(req) {
-  return req.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
+async function getTokenFile(filename) {
+  try {
+    const data = await readFile(path.join(dataDir, filename));
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
 }
 
-function encrypt(text) {
-  const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY, 'hex'), iv);
-  return iv.toString('hex') + ':' + cipher.update(text, 'utf8', 'hex') + cipher.final('hex');
+async function saveTokenFile(filename, data) {
+  await writeFile(path.join(dataDir, filename), JSON.stringify(data));
 }
 
-export default async function handler(req) {
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Only POST allowed' }), { status: 405 });
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const { token, ip } = req.body;
+  if (!token || !ip) return res.status(400).json({ error: 'Token and IP required' });
+
+  const filename = `${token}.json`;
+  const tokenData = await getTokenFile(filename);
+
+  if (!tokenData) return res.status(404).json({ error: 'Token not found' });
+  if (tokenData.status !== 'unused') return res.status(400).json({ error: 'Token already used' });
+
+  // Check IP
+  if (tokenData.ip && tokenData.ip !== ip) {
+    return res.status(403).json({ error: 'IP mismatch' });
   }
 
-  const { token } = await req.json();
-  if (!token) return new Response(JSON.stringify({ error: 'Token required' }), { status: 400 });
+  // Update IP in token data
+  tokenData.ip = ip;
+  await saveTokenFile(filename, tokenData);
 
-  const blobs = await list({ prefix: 'tokens/' });
-  for (const blob of blobs.blobs) {
-    const data = await get(blob.pathname).then(res => res.json());
-    if (data.token === token) {
-      const ip = getIP(req);
-      const updated = { ...data, ip };
-      await put(blob.pathname, JSON.stringify(updated), { access: 'private' });
-      return new Response(JSON.stringify({ enctoken: data.enctoken }), { status: 200 });
-    }
-  }
-
-  return new Response(JSON.stringify({ error: 'Token not found' }), { status: 404 });
+  res.status(200).json({ enctoken: tokenData.enctoken });
 }
