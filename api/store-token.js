@@ -1,38 +1,41 @@
-export default async function handler(req, res) {
-  // Dynamically import Blob inside the function
-  const { Blob } = await import('@vercel/blob');
-import crypto from 'crypto';
-const AES_KEY = process.env.AES_KEY;
-if (!AES_KEY) throw new Error('Missing AES_KEY env variable');
+const TOKEN_BLOB_NAME = 'tokens.json';
 
-const blob = new Blob();
-
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  const { token } = req.body;
-  if (!token) return res.status(400).json({ error: 'Token is required' });
+module.exports = async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).end();
 
   try {
-    const key = Buffer.from(AES_KEY, 'hex');
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-    let encrypted = cipher.update(token, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    const enctoken = iv.toString('hex') + ':' + encrypted;
+    const { Blob } = await import('@vercel/blob');
 
-    const tokenData = {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: 'Token is required' });
+
+    // Fetch existing tokens blob or initialize empty array
+    let tokens = [];
+    try {
+      const existingBlob = await Blob.get(TOKEN_BLOB_NAME);
+      const text = await existingBlob.text();
+      tokens = JSON.parse(text);
+    } catch {
+      // no blob yet - ignore
+    }
+
+    // Encrypt token - simple base64 here (replace with your own encrypt if needed)
+    const enctoken = Buffer.from(token).toString('base64');
+
+    tokens.push({
       token,
       status: 'unused',
       ip: '',
       enctoken,
-    };
+    });
 
-    // Save tokenData as JSON blob, key = token.json
-    await blob.put(`tokens/${token}.json`, JSON.stringify(tokenData), { contentType: 'application/json' });
+    // Save updated tokens back to blob storage
+    const newBlob = new Blob([JSON.stringify(tokens)], { type: 'application/json' });
+    await Blob.put(TOKEN_BLOB_NAME, newBlob);
 
-    return res.status(200).json({ enctoken });
+    res.status(200).json({ message: 'Token stored', enctoken });
   } catch (e) {
-    return res.status(500).json({ error: 'Encryption failed' });
+    console.error(e);
+    res.status(500).json({ error: 'Internal error' });
   }
-}
+};
