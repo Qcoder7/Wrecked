@@ -1,28 +1,35 @@
-export default async function handler(req, res) {
-  // Dynamically import Blob inside the function
-  const { Blob } = await import('@vercel/blob');
-const blob = new Blob();
+const TOKEN_BLOB_NAME = 'tokens.json';
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  const { enctoken } = req.body;
-  if (!enctoken) return res.status(400).json({ error: 'Missing enctoken' });
+module.exports = async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).end();
 
   try {
-    // List all tokens
-    const blobs = await blob.list('tokens/');
-    for (const file of blobs) {
-      const content = await (await blob.get(file.key)).text();
-      const data = JSON.parse(content);
+    const { Blob } = await import('@vercel/blob');
 
-      if (data.enctoken === enctoken) {
-        return res.status(200).json({ found: true, data });
-      }
+    const { enctoken } = req.body;
+    if (!enctoken) return res.status(400).json({ error: 'enctoken required' });
+
+    let tokens = [];
+    try {
+      const blob = await Blob.get(TOKEN_BLOB_NAME);
+      const text = await blob.text();
+      tokens = JSON.parse(text);
+    } catch {
+      return res.status(404).json({ error: 'No tokens found' });
     }
 
-    return res.status(404).json({ found: false, error: 'Encrypted token not found' });
+    const tokenObj = tokens.find(t => t.enctoken === enctoken);
+    if (!tokenObj) return res.status(404).json({ error: 'Encrypted token invalid' });
+
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+
+    if (tokenObj.ip !== ip) {
+      return res.status(403).json({ error: 'IP mismatch' });
+    }
+
+    res.status(200).json({ valid: true });
   } catch (e) {
-    return res.status(500).json({ error: 'Error checking encrypted token' });
+    console.error(e);
+    res.status(500).json({ error: 'Internal error' });
   }
-}
+};
