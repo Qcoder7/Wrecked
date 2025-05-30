@@ -7,19 +7,15 @@ module.exports = async function handler(req, res) {
     const { Blob } = await import('@vercel/blob');
 
     const { token } = req.body;
-    if (!token) return res.status(400).json({ error: 'Token is required' });
+    if (!token) return res.status(400).json({ error: 'Token required' });
 
-    // Fetch existing tokens blob or initialize empty array
     let tokens = [];
     try {
       const existingBlob = await Blob.get(TOKEN_BLOB_NAME);
       const text = await existingBlob.text();
       tokens = JSON.parse(text);
-    } catch {
-      // no blob yet - ignore
-    }
+    } catch {}
 
-    // Encrypt token - simple base64 here (replace with your own encrypt if needed)
     const enctoken = Buffer.from(token).toString('base64');
 
     tokens.push({
@@ -29,7 +25,6 @@ module.exports = async function handler(req, res) {
       enctoken,
     });
 
-    // Save updated tokens back to blob storage
     const newBlob = new Blob([JSON.stringify(tokens)], { type: 'application/json' });
     await Blob.put(TOKEN_BLOB_NAME, newBlob);
 
