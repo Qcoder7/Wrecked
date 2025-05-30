@@ -1,4 +1,8 @@
-import { get } from '@vercel/blob';
+import { createClient } from '@vercel/edge-config';
+
+const edgeConfig = createClient({
+  id: process.env.EDGE_CONFIG_ID,
+});
 
 export const config = {
   runtime: 'edge',
@@ -18,26 +22,22 @@ export default async function handler(req) {
       });
     }
 
-    const TOKEN_BLOB_NAME = 'tokens-LQF9Q9VAixdVmmKbTzpT3P63EOjiDq.json';
-    const blob = await get(TOKEN_BLOB_NAME);
-    const text = await blob.text();
-    const tokens = JSON.parse(text);
-
-    const tokenObj = tokens.find(t => t.token === token);
-    if (!tokenObj) {
+    const dataStr = await edgeConfig.get(token);
+    if (!dataStr) {
       return new Response(JSON.stringify({ error: 'Token invalid' }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    return new Response(JSON.stringify({ valid: true, enctoken: tokenObj.enctoken }), {
+    const data = JSON.parse(dataStr);
+
+    return new Response(JSON.stringify({ valid: true, enctoken: data.enctoken }), {
+      status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
-
   } catch (e) {
-    console.error('Blob read error:', e);
-    return new Response(JSON.stringify({ error: 'Internal error' }), {
+    return new Response(JSON.stringify({ error: e.message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
