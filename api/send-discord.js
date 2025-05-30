@@ -1,41 +1,47 @@
-const TOKEN_BLOB_NAME = 'tokens.json';
-const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1367880439104012338/o6XRSE15oiezn-dvhKxFZbqAQuRIAhIBlImKrXwLIlkpYYIlskpQNgxcDg62w458D_ob';
+export const config = {
+  runtime: 'edge',
+};
 
-const fetch = require('node-fetch');
-
-module.exports = async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).end();
+export default async function handler(req) {
+  if (req.method !== 'POST') {
+    return new Response('Method Not Allowed', { status: 405 });
+  }
 
   try {
-    const body = await jsonBody(req);
-    const { content, webhookURL } = body;
-    if (!content || !webhookURL) return res.status(400).json({ error: 'Missing content or webhookURL' });
+    const { content } = await req.json();
+    if (!content) {
+      return new Response(JSON.stringify({ error: 'Content required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
-    const fetch = (await import('node-fetch')).default;
+    const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
+    if (!webhookUrl) {
+      return new Response(JSON.stringify({ error: 'Webhook URL not configured' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
-    const response = await fetch(webhookURL, {
+    const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content }),
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      return res.status(500).json({ error: 'Failed to send message', details: errorText });
+      throw new Error(`Discord webhook error: ${response.statusText}`);
     }
 
-    res.status(200).json({ success: true });
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Internal error' });
+    return new Response(JSON.stringify({ error: e.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
-};
-
-async function jsonBody(req) {
-  const buffers = [];
-  for await (const chunk of req) {
-    buffers.push(chunk);
-  }
-  const data = Buffer.concat(buffers).toString();
-  return JSON.parse(data);
 }
