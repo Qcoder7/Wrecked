@@ -1,15 +1,10 @@
 import crypto from 'crypto';
-import { writeFile, readFile, unlink } from 'fs/promises';
-import path from 'path';
+import { Blob } from '@vercel/blob';
 
 const AES_KEY = process.env.AES_KEY;
 if (!AES_KEY) throw new Error('Missing AES_KEY env variable');
 
-const dataDir = path.resolve('./data/tokens');
-
-async function saveTokenFile(filename, data) {
-  await writeFile(path.join(dataDir, filename), JSON.stringify(data));
-}
+const blob = new Blob();
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -32,13 +27,8 @@ export default async function handler(req, res) {
       enctoken,
     };
 
-    // Make sure data directory exists
-    await import('fs').then(fs => {
-      if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-    });
-
-    // Save JSON file named by token
-    await saveTokenFile(`${token}.json`, tokenData);
+    // Save tokenData as JSON blob, key = token.json
+    await blob.put(`tokens/${token}.json`, JSON.stringify(tokenData), { contentType: 'application/json' });
 
     return res.status(200).json({ enctoken });
   } catch (e) {
