@@ -1,4 +1,4 @@
-import { EdgeConfig } from '@vercel/edge-config';
+import { get, set } from '@vercel/edge-config';
 
 export const config = { runtime: 'edge' };
 
