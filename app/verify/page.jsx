@@ -1,11 +1,15 @@
-'use client'; // REQUIRED for useSearchParams
+'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+
+export const dynamic = 'force-dynamic'; // ⬅️ Tells Next.js to avoid prerendering
 
 export default function VerifyPage() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
+  const [link, setLink] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     async function verifyToken() {
@@ -36,10 +40,21 @@ export default function VerifyPage() {
   }, [token]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-800 to-purple-800 text-white text-center p-4">
-      <h1 className="text-2xl font-bold drop-shadow-lg animate-pulse">
-        Please Wait While We Check Ur Token And Generate Link
-      </h1>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-800 to-purple-800 text-white text-center p-4">
+      {link ? (
+        <a
+          href={link}
+          className="mt-4 text-white border border-white px-4 py-2 rounded hover:bg-white hover:text-black transition shadow-lg"
+        >
+          Click Here To Proceed
+        </a>
+      ) : error ? (
+        <h1 className="text-2xl font-bold drop-shadow-lg">{error}</h1>
+      ) : (
+        <h1 className="text-2xl font-bold drop-shadow-lg animate-pulse">
+          Please Wait While We Check Ur Token And Generate Link
+        </h1>
+      )}
     </div>
   );
 }
