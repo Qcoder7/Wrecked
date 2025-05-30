@@ -1,73 +1,108 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 export default function EnterCodePage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const [discordUsername, setDiscordUsername] = useState('');
+  const enctoken = searchParams.get('token'); // or the correct param name if different
+
+  const [valid, setValid] = useState(false);
+  const [ipMatch, setIpMatch] = useState(false);
+  const [username, setUsername] = useState('');
+  const [checkboxChecked, setCheckboxChecked] = useState(false);
   const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
 
-  // Get enctoken from URL query: ?=ENCTOKEN
-  const enctoken = searchParams.get('') || ''; 
+  useEffect(() => {
+    async function checkToken() {
+      if (!enctoken) return;
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setError('');
-    setMessage('');
+      try {
+        const res = await fetch('/api/check-enctoken', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enctoken }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Invalid encrypted token');
 
-    if (!discordUsername) {
-      setError('Please enter your Discord username');
-      return;
+        setValid(true);
+        setIpMatch(data.ipMatch);
+      } catch (err) {
+        setValid(false);
+        setMessage(err.message);
+      }
     }
 
+    checkToken();
+  }, [enctoken]);
+
+  async function handleSend() {
+    if (!username.trim()) {
+      setMessage('Please enter a Discord username');
+      return;
+    }
     try {
-      // Check if enctoken and IP match
-      const checkRes = await fetch('/api/check-enctoken', {
+      const res = await fetch('/api/senddiscord', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enctoken }),
+        body: JSON.stringify({ enctoken, username }),
       });
-      if (!checkRes.ok) throw new Error('Invalid or expired token');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send');
 
-      // Send Discord username and delete token
-      const sendRes = await fetch('/api/send-discord', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enctoken, discordUsername }),
-      });
-      if (!sendRes.ok) throw new Error('Failed to send Discord username');
-
-      setMessage('Verification successful! You can close this page.');
-      setDiscordUsername('');
-    } catch (e) {
-      setError(e.message);
+      setMessage('Please Proceed To Discord For Continuing');
+    } catch (err) {
+      setMessage(err.message);
     }
   }
 
+  if (!valid) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-800 to-purple-800 p-6">
+        <h1 className="text-white text-2xl font-bold drop-shadow-lg text-center">
+          {message || 'Invalid or missing token'}
+        </h1>
+      </div>
+    );
+  }
+
+  if (!ipMatch) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-800 to-purple-800 p-6">
+        <h1 className="text-white text-2xl font-bold drop-shadow-lg text-center">
+          IP mismatch detected.
+        </h1>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-purple-900 to-pink-700 p-4 text-white text-center">
-      <h1 className="text-3xl font-bold mb-6">Enter Your Discord Username</h1>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-full max-w-sm">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-800 to-purple-800 p-6">
+      <h1 className="text-white text-2xl font-bold mb-6 drop-shadow-lg">
+        Please Enter Your Discord Username In the Box Below
+      </h1>
+      <input
+        type="text"
+        placeholder="Discord Username"
+        className="p-3 rounded-md text-black w-72 mb-4"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+      />
+      <label className="flex items-center space-x-2 text-white cursor-pointer mb-4 select-none">
         <input
-          type="text"
-          placeholder="Discord username#1234"
-          value={discordUsername}
-          onChange={(e) => setDiscordUsername(e.target.value)}
-          className="px-4 py-2 rounded text-black text-lg"
-          required
+          type="checkbox"
+          checked={checkboxChecked}
+          onChange={(e) => {
+            setCheckboxChecked(e.target.checked);
+            if (e.target.checked) handleSend();
+          }}
         />
-        <button
-          type="submit"
-          className="bg-white text-purple-900 font-bold py-2 rounded hover:bg-gray-200 transition"
-        >
-          Verify
-        </button>
-      </form>
-      {message && <p className="mt-4 text-green-400">{message}</p>}
-      {error && <p className="mt-4 text-red-400">{error}</p>}
+        <span>Send to Discord</span>
+      </label>
+      {message && (
+        <p className="text-white font-semibold mt-4">{message}</p>
+      )}
     </div>
   );
 }
