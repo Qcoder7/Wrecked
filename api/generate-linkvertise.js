@@ -16,7 +16,7 @@ module.exports = async function handler(req, res) {
     const { enctoken } = req.body;
     if (!enctoken) return res.status(400).json({ error: 'enctoken required' });
 
-    const redirectLink = `https://wrecked.vercel.app/entercode?=${encodeURIComponent(enctoken)}`;
+    const redirectLink = `https://wreckedgen.vercel.app/entercode?=${encodeURIComponent(enctoken)}`;
     const lvLink = linkvertise(LINKVERTISE_USERID, redirectLink);
 
     res.status(200).json({ link: lvLink });
