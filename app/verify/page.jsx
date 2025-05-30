@@ -1,55 +1,65 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 export default function VerifyPage() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
+
   const [link, setLink] = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!token) return;
-    async function verifyToken() {
+    async function verifyAndGenerate() {
+      if (!token) return;
+
       try {
+        // Call your verify-token API
         const res = await fetch('/api/verify-token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token }),
         });
-        if (!res.ok) throw new Error('Invalid token');
         const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Invalid token');
 
-        const gen = await fetch('/api/generate-linkvertise', {
+        // Call your generate-linkvertise API
+        const genRes = await fetch('/api/generate-linkvertise', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ enctoken: data.enctoken }),
         });
-        if (!gen.ok) throw new Error('Failed to generate link');
-        const { link } = await gen.json();
-        setLink(link);
-      } catch (e) {
-        setError(e.message);
+        const genData = await genRes.json();
+        if (!genRes.ok) throw new Error(genData.error || 'Failed to generate link');
+
+        setLink(genData.link);
+      } catch (err) {
+        setError(err.message);
       }
     }
-    verifyToken();
+
+    verifyAndGenerate();
   }, [token]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-800 to-purple-800 p-4 text-white text-center">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-800 to-purple-800 p-6">
       {!link && !error && (
-        <h1 className="text-2xl font-bold drop-shadow-lg animate-pulse">Verifying token...</h1>
+        <h1 className="text-white text-2xl font-bold drop-shadow-lg animate-pulse text-center">
+          Please Wait While We Check Ur Token And Generate Link
+        </h1>
       )}
-      {error && <p className="text-red-400">{error}</p>}
+      {error && (
+        <h1 className="text-red-400 text-xl font-semibold">{error}</h1>
+      )}
       {link && (
         <a
           href={link}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-4 px-6 py-3 rounded bg-white text-black font-semibold hover:bg-gray-200 transition"
+          className="mt-8 px-8 py-4 text-white border-2 border-white rounded-md font-semibold hover:bg-white hover:text-black transition"
         >
-          Click Here to Proceed
+          Click Here To Proceed
         </a>
       )}
     </div>
