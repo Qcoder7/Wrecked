@@ -10,27 +10,20 @@ module.exports = async function handler(req, res) {
     const { token } = body;
     if (!token) return res.status(400).json({ error: 'Token required' });
 
-    let tokens = [];
-    try {
-      const blob = await get(TOKEN_BLOB_NAME);
-      const text = await blob.text();
-      tokens = JSON.parse(text);
-    } catch (e) {
-      console.error('Blob read error:', e);
-      return res.status(404).json({ error: 'No tokens found' });
-    }
+    const blob = await get(TOKEN_BLOB_NAME);
+    const text = await blob.text();
+    const tokens = JSON.parse(text);
 
     const tokenObj = tokens.find(t => t.token === token);
     if (!tokenObj) return res.status(404).json({ error: 'Token invalid' });
 
     res.status(200).json({ valid: true, enctoken: tokenObj.enctoken });
   } catch (e) {
-    console.error('Internal error:', e);
+    console.error('Blob read error:', e);
     res.status(500).json({ error: 'Internal error' });
   }
 };
 
-// Helper to parse JSON body
 async function jsonBody(req) {
   const buffers = [];
   for await (const chunk of req) {
