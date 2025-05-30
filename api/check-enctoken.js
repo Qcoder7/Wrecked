@@ -1,5 +1,5 @@
 import { Blob } from '@vercel/blob';
-
+const { Blob } = await import('@vercel/blob');
 const blob = new Blob();
 
 export default async function handler(req, res) {
