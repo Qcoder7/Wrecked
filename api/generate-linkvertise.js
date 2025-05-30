@@ -1,27 +1,33 @@
-const LINKVERTISE_USERID = 991963;
+export const config = {
+  runtime: 'edge',
+};
 
-function btoa(str) {
-  return Buffer.from(str.toString(), 'binary').toString('base64');
-}
-
-function linkvertise(userid, link) {
-  const base_url = `https://link-to.net/${userid}/${Math.floor(Math.random() * 1000)}/dynamic`;
-  return base_url + '?r=' + btoa(encodeURI(link));
-}
-
-module.exports = async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).end();
+export default async function handler(req) {
+  if (req.method !== 'POST') {
+    return new Response('Method Not Allowed', { status: 405 });
+  }
 
   try {
-    const { enctoken } = req.body;
-    if (!enctoken) return res.status(400).json({ error: 'enctoken required' });
+    const { enctoken } = await req.json();
+    if (!enctoken) {
+      return new Response(JSON.stringify({ error: 'Encrypted token required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
-    const redirectLink = `https://wreckedgen.vercel.app/entercode?=${encodeURIComponent(enctoken)}`;
-    const lvLink = linkvertise(LINKVERTISE_USERID, redirectLink);
+    // Example Linkvertise generation - customize your logic here
+    const linkvertiseUserId = '991963';
+    const url = `https://linkvertise.com/${linkvertiseUserId}/redirect?token=${encodeURIComponent(enctoken)}`;
 
-    res.status(200).json({ link: lvLink });
+    return new Response(JSON.stringify({ url }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Internal error' });
+    return new Response(JSON.stringify({ error: e.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
-};
+}
