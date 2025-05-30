@@ -1,34 +1,45 @@
-const TOKEN_BLOB_NAME = 'tokens-LQF9Q9VAixdVmmKbTzpT3P63EOjiDq.json';
+import { get } from '@vercel/blob';
 
-module.exports = async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).end();
+export const config = {
+  runtime: 'edge',
+};
+
+export default async function handler(req) {
+  if (req.method !== 'POST') {
+    return new Response('Method Not Allowed', { status: 405 });
+  }
 
   try {
-    const { get } = await import('@vercel/blob');
+    const { token } = await req.json();
+    if (!token) {
+      return new Response(JSON.stringify({ error: 'Token required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
-    const body = await jsonBody(req);
-    const { token } = body;
-    if (!token) return res.status(400).json({ error: 'Token required' });
-
+    const TOKEN_BLOB_NAME = 'tokens-LQF9Q9VAixdVmmKbTzpT3P63EOjiDq.json';
     const blob = await get(TOKEN_BLOB_NAME);
     const text = await blob.text();
     const tokens = JSON.parse(text);
 
     const tokenObj = tokens.find(t => t.token === token);
-    if (!tokenObj) return res.status(404).json({ error: 'Token invalid' });
+    if (!tokenObj) {
+      return new Response(JSON.stringify({ error: 'Token invalid' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
-    res.status(200).json({ valid: true, enctoken: tokenObj.enctoken });
+    return new Response(JSON.stringify({ valid: true, enctoken: tokenObj.enctoken }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+
   } catch (e) {
     console.error('Blob read error:', e);
-    res.status(500).json({ error: 'Internal error' });
+    return new Response(JSON.stringify({ error: 'Internal error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
-};
-
-async function jsonBody(req) {
-  const buffers = [];
-  for await (const chunk of req) {
-    buffers.push(chunk);
-  }
-  const data = Buffer.concat(buffers).toString();
-  return JSON.parse(data);
 }
