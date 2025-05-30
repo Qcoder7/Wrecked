@@ -1,4 +1,5 @@
 import { Blob } from '@vercel/blob';
+const { Blob } = await import('@vercel/blob');
 import fetch from 'node-fetch';
 
 const blob = new Blob();
