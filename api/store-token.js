@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { Blob } from '@vercel/blob';
-
+const { Blob } = await import('@vercel/blob');
 const AES_KEY = process.env.AES_KEY;
 if (!AES_KEY) throw new Error('Missing AES_KEY env variable');
 
