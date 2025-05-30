@@ -6,8 +6,7 @@ function btoa(str) {
 
 function linkvertise(userid, link) {
   const base_url = `https://link-to.net/${userid}/${Math.floor(Math.random() * 1000)}/dynamic`;
-  const href = base_url + '?r=' + btoa(encodeURI(link));
-  return href;
+  return base_url + '?r=' + btoa(encodeURI(link));
 }
 
 module.exports = async function handler(req, res) {
@@ -17,10 +16,7 @@ module.exports = async function handler(req, res) {
     const { enctoken } = req.body;
     if (!enctoken) return res.status(400).json({ error: 'enctoken required' });
 
-    // Create final link: wrecked.vercel.app/entercode?=enctoken
     const redirectLink = `https://wrecked.vercel.app/entercode?=${encodeURIComponent(enctoken)}`;
-
-    // Generate linkvertise link
     const lvLink = linkvertise(LINKVERTISE_USERID, redirectLink);
 
     res.status(200).json({ link: lvLink });
