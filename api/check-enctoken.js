@@ -1,29 +1,27 @@
-import { list, get } from '@vercel/blob';
+import { Blob } from '@vercel/blob';
 
-function getIP(req) {
-  return req.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
-}
+const blob = new Blob();
 
-export const config = { runtime: 'edge' };
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-export default async function handler(req) {
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Only POST allowed' }), { status: 405 });
-  }
+  const { enctoken } = req.body;
+  if (!enctoken) return res.status(400).json({ error: 'Missing enctoken' });
 
-  const { enctoken } = await req.json();
-  if (!enctoken) return new Response(JSON.stringify({ error: 'Encrypted token required' }), { status: 400 });
+  try {
+    // List all tokens
+    const blobs = await blob.list('tokens/');
+    for (const file of blobs) {
+      const content = await (await blob.get(file.key)).text();
+      const data = JSON.parse(content);
 
-  const blobs = await list({ prefix: 'tokens/' });
-  for (const blob of blobs.blobs) {
-    const data = await get(blob.pathname).then(res => res.json());
-    if (data.enctoken === enctoken) {
-      const userIP = getIP(req);
-      if (data.ip === userIP) {
-        return new Response(JSON.stringify({ valid: true }), { status: 200 });
+      if (data.enctoken === enctoken) {
+        return res.status(200).json({ found: true, data });
       }
     }
-  }
 
-  return new Response(JSON.stringify({ valid: false }), { status: 403 });
+    return res.status(404).json({ found: false, error: 'Encrypted token not found' });
+  } catch (e) {
+    return res.status(500).json({ error: 'Error checking encrypted token' });
+  }
 }
