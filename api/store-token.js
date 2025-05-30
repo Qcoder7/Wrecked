@@ -16,15 +16,18 @@ module.exports = async function handler(req, res) {
       const text = await blob.text();
       tokens = JSON.parse(text);
     } catch {
-      return res.status(404).json({ error: 'No tokens found' });
+      // If no tokens.json found, create empty array (or return error)
+      tokens = [];
     }
 
     const tokenObj = tokens.find(t => t.token === token);
     if (!tokenObj) return res.status(404).json({ error: 'Token invalid' });
 
+    // Record user IP
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
     tokenObj.ip = ip;
 
+    // Update tokens blob
     const newBlob = blobModule.Blob.from(JSON.stringify(tokens), TOKEN_BLOB_NAME, {
       type: 'application/json',
     });
@@ -33,12 +36,11 @@ module.exports = async function handler(req, res) {
 
     res.status(200).json({ enctoken: tokenObj.enctoken });
   } catch (e) {
-    console.error(e);
+    console.error('Internal error:', e);
     res.status(500).json({ error: 'Internal error' });
   }
 };
 
-// Helper to parse JSON body (for CommonJS on Vercel Edge)
 async function jsonBody(req) {
   const buffers = [];
   for await (const chunk of req) {
