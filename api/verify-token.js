@@ -1,34 +1,41 @@
-export default async function handler(req, res) {
-  // Dynamically import Blob inside the function
-  const { Blob } = await import('@vercel/blob');
+const TOKEN_BLOB_NAME = 'tokens.json';
 
-const blob = new Blob();
-
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  const { token, ip } = req.body;
-  if (!token || !ip) return res.status(400).json({ error: 'Token and IP required' });
+module.exports = async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).end();
 
   try {
-    const key = `tokens/${token}.json`;
-    const tokenBlob = await blob.get(key);
+    const { Blob } = await import('@vercel/blob');
 
-    if (!tokenBlob) return res.status(404).json({ error: 'Token not found' });
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: 'Token is required' });
 
-    const tokenData = JSON.parse(await tokenBlob.text());
+    // Get tokens blob
+    let tokens = [];
+    try {
+      const blob = await Blob.get(TOKEN_BLOB_NAME);
+      const text = await blob.text();
+      tokens = JSON.parse(text);
+    } catch {
+      return res.status(404).json({ error: 'No tokens found' });
+    }
 
-    if (tokenData.status !== 'unused') return res.status(400).json({ error: 'Token already used' });
+    // Find token in array
+    const tokenObj = tokens.find(t => t.token === token);
+    if (!tokenObj) return res.status(404).json({ error: 'Token invalid' });
 
-    if (tokenData.ip && tokenData.ip !== ip) return res.status(403).json({ error: 'IP mismatch' });
+    // Update IP from request headers (example)
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
 
-    // Update IP
-    tokenData.ip = ip;
+    // Save IP in token object
+    tokenObj.ip = ip;
 
-    await blob.put(key, JSON.stringify(tokenData), { contentType: 'application/json' });
+    // Save updated tokens
+    const newBlob = new Blob([JSON.stringify(tokens)], { type: 'application/json' });
+    await Blob.put(TOKEN_BLOB_NAME, newBlob);
 
-    return res.status(200).json({ enctoken: tokenData.enctoken });
+    res.status(200).json({ enctoken: tokenObj.enctoken });
   } catch (e) {
-    return res.status(500).json({ error: 'Verification failed' });
+    console.error(e);
+    res.status(500).json({ error: 'Internal error' });
   }
-}
+};
