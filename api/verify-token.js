@@ -1,45 +1,28 @@
-import { createClient } from '@vercel/edge-config';
+import { EdgeConfig } from '@vercel/edge-config';
 
-const edgeConfig = createClient({
-  id: process.env.EDGE_CONFIG_ID,
-});
+export const config = { runtime: 'edge' };
 
-export const config = {
-  runtime: 'edge',
-};
+const ec = new EdgeConfig(process.env.EDGE_CONFIG_CONNECTION_STRING);
 
 export default async function handler(req) {
   if (req.method !== 'POST') {
     return new Response('Method Not Allowed', { status: 405 });
   }
-
   try {
     const { token } = await req.json();
-    if (!token) {
-      return new Response(JSON.stringify({ error: 'Token required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
+    if (!token) return new Response(JSON.stringify({ error: 'Token required' }), { status: 400 });
 
-    const dataStr = await edgeConfig.get(token);
-    if (!dataStr) {
-      return new Response(JSON.stringify({ error: 'Token invalid' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
+    const tokens = (await ec.get('tokens')) || {};
 
-    const data = JSON.parse(dataStr);
+    const tokenObj = tokens[token];
+    if (!tokenObj) return new Response(JSON.stringify({ error: 'Token invalid' }), { status: 404 });
 
-    return new Response(JSON.stringify({ valid: true, enctoken: data.enctoken }), {
+    // Return encrypted token for verification
+    return new Response(JSON.stringify({ valid: true, enctoken: tokenObj.enctoken }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
-  } catch (e) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+  } catch {
+    return new Response(JSON.stringify({ error: 'Internal error' }), { status: 500 });
   }
 }
