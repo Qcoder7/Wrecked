@@ -4,38 +4,46 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   try {
-    // Manually parse JSON body for Vercel Edge function
-    const bodyText = await new Response(req).text();
-    const body = JSON.parse(bodyText);
+    const blobModule = await import('@vercel/blob');
 
+    const body = await jsonBody(req);
     const { token } = body;
     if (!token) return res.status(400).json({ error: 'Token required' });
 
-    const { Blob } = await import('@vercel/blob');
-
     let tokens = [];
     try {
-      const blob = await Blob.get(TOKEN_BLOB_NAME);
+      const blob = await blobModule.Blob.get(TOKEN_BLOB_NAME);
       const text = await blob.text();
       tokens = JSON.parse(text);
     } catch {
-      tokens = [];
+      return res.status(404).json({ error: 'No tokens found' });
     }
 
-    if (tokens.find(t => t.token === token)) {
-      return res.status(409).json({ error: 'Token already exists' });
-    }
+    const tokenObj = tokens.find(t => t.token === token);
+    if (!tokenObj) return res.status(404).json({ error: 'Token invalid' });
 
-    const enctoken = Buffer.from(token).toString('hex');
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+    tokenObj.ip = ip;
 
-    tokens.push({ token, status: 'unused', ip: '', enctoken });
+    const newBlob = blobModule.Blob.from(JSON.stringify(tokens), TOKEN_BLOB_NAME, {
+      type: 'application/json',
+    });
 
-    const newBlob = new Blob([JSON.stringify(tokens)], { type: 'application/json' });
-    await Blob.put(TOKEN_BLOB_NAME, newBlob);
+    await blobModule.Blob.put(TOKEN_BLOB_NAME, newBlob);
 
-    res.status(200).json({ success: true, enctoken });
+    res.status(200).json({ enctoken: tokenObj.enctoken });
   } catch (e) {
     console.error(e);
-    res.status(400).json({ error: 'Invalid JSON or internal error' });
+    res.status(500).json({ error: 'Internal error' });
   }
 };
+
+// Helper to parse JSON body (for CommonJS on Vercel Edge)
+async function jsonBody(req) {
+  const buffers = [];
+  for await (const chunk of req) {
+    buffers.push(chunk);
+  }
+  const data = Buffer.concat(buffers).toString();
+  return JSON.parse(data);
+}
