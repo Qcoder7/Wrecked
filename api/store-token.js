@@ -1,56 +1,46 @@
-const TOKEN_BLOB_NAME = 'tokens-LQF9Q9VAixdVmmKbTzpT3P63EOjiDq.json';
+import { createClient } from '@vercel/edge-config';
 
-module.exports = async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).end();
+const edgeConfig = createClient({
+  id: process.env.EDGE_CONFIG_ID,
+});
+
+export const config = {
+  runtime: 'edge',
+};
+
+export default async function handler(req) {
+  if (req.method !== 'POST') {
+    return new Response('Method Not Allowed', { status: 405 });
+  }
 
   try {
-    const blobModule = await import('@vercel/blob');
-    const { put, get } = blobModule;
-
-    const body = await jsonBody(req);
-    const { token } = body;
-    if (!token) return res.status(400).json({ error: 'Token required' });
-
-    let tokens = [];
-    try {
-      const blob = await get(TOKEN_BLOB_NAME);
-      const text = await blob.text();
-      tokens = JSON.parse(text);
-    } catch {
-      tokens = [];
+    const { token } = await req.json();
+    if (!token) {
+      return new Response(JSON.stringify({ error: 'Token required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
-    const existing = tokens.find(t => t.token === token);
-    if (existing) return res.status(409).json({ error: 'Token already exists' });
+    // Simple encryption: base64 (replace with your own method)
+    const enctoken = btoa(token);
 
-    // Simple encryption example: reverse string (replace with your own logic)
-    const enctoken = token.split('').reverse().join('');
-
-    tokens.push({
+    // Store in Edge Config: key=token, value=JSON string with data
+    await edgeConfig.set(token, JSON.stringify({
       token,
       ip: '',
       enctoken,
       status: 'unused',
-    });
+    }));
 
-    await put(TOKEN_BLOB_NAME, JSON.stringify(tokens), {
-      access: 'public',
-      type: 'application/json',
-      allowOverwrite: true,  // <-- This fixes the error
+    return new Response(JSON.stringify({ success: true, enctoken }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
     });
-
-    res.status(200).json({ message: 'Token stored', enctoken });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Internal error' });
+    return new Response(JSON.stringify({ error: e.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
-};
-
-async function jsonBody(req) {
-  const buffers = [];
-  for await (const chunk of req) {
-    buffers.push(chunk);
-  }
-  const data = Buffer.concat(buffers).toString();
-  return JSON.parse(data);
 }
