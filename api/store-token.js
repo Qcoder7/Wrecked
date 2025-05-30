@@ -23,7 +23,7 @@ module.exports = async function handler(req, res) {
     const existing = tokens.find(t => t.token === token);
     if (existing) return res.status(409).json({ error: 'Token already exists' });
 
-    // Simple encryption: reverse string (replace with your own logic)
+    // Simple encryption example: reverse string (replace with your own logic)
     const enctoken = token.split('').reverse().join('');
 
     tokens.push({
@@ -33,10 +33,10 @@ module.exports = async function handler(req, res) {
       status: 'unused',
     });
 
-    // Use put to update the tokens.json blob
     await put(TOKEN_BLOB_NAME, JSON.stringify(tokens), {
       access: 'public',
       type: 'application/json',
+      allowOverwrite: true,  // <-- This fixes the error
     });
 
     res.status(200).json({ message: 'Token stored', enctoken });
