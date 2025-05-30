@@ -1,4 +1,4 @@
-const TOKEN_BLOB_NAME = 'tokens.json';
+const TOKEN_BLOB_NAME = 'tokens-LQF9Q9VAixdVmmKbTzpT3P63EOjiDq.json';
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
