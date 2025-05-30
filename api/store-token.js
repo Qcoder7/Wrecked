@@ -34,10 +34,9 @@ module.exports = async function handler(req, res) {
 
     tokens.push(tokenObj);
 
-    const newBlob = Blob.from(JSON.stringify(tokens), TOKEN_BLOB_NAME, {
-      type: 'application/json',
-    });
+    const newBlob = new Blob([JSON.stringify(tokens)], { type: 'application/json' });
     await Blob.put(TOKEN_BLOB_NAME, newBlob);
+
 
     res.status(201).json({ message: 'Token stored', enctoken: encrypted });
   } catch (e) {
