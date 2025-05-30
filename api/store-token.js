@@ -4,13 +4,11 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   try {
-    // Check if Content-Type is application/json
-    if (req.headers['content-type'] !== 'application/json') {
-      return res.status(400).json({ error: 'Invalid Content-Type. Expected application/json' });
-    }
+    // Manually parse JSON body for Vercel Edge function
+    const bodyText = await new Response(req).text();
+    const body = JSON.parse(bodyText);
 
-    const { token } = req.body;
-
+    const { token } = body;
     if (!token) return res.status(400).json({ error: 'Token required' });
 
     const { Blob } = await import('@vercel/blob');
@@ -21,25 +19,16 @@ module.exports = async function handler(req, res) {
       const text = await blob.text();
       tokens = JSON.parse(text);
     } catch {
-      // If blob not found, initialize empty tokens array
       tokens = [];
     }
 
-    // Check if token already exists
-    const existing = tokens.find(t => t.token === token);
-    if (existing) {
+    if (tokens.find(t => t.token === token)) {
       return res.status(409).json({ error: 'Token already exists' });
     }
 
-    // Encrypt token (dummy method for now — use real encryption in production)
     const enctoken = Buffer.from(token).toString('hex');
 
-    tokens.push({
-      token,
-      status: 'unused',
-      ip: '',
-      enctoken
-    });
+    tokens.push({ token, status: 'unused', ip: '', enctoken });
 
     const newBlob = new Blob([JSON.stringify(tokens)], { type: 'application/json' });
     await Blob.put(TOKEN_BLOB_NAME, newBlob);
@@ -47,6 +36,6 @@ module.exports = async function handler(req, res) {
     res.status(200).json({ success: true, enctoken });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: 'Internal error' });
+    res.status(400).json({ error: 'Invalid JSON or internal error' });
   }
 };
