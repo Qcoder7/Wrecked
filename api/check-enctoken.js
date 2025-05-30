@@ -1,35 +1,48 @@
-const TOKEN_BLOB_NAME = 'tokens.json';
+import { createClient } from '@vercel/edge-config';
 
-module.exports = async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).end();
+const edgeConfig = createClient({
+  id: process.env.EDGE_CONFIG_ID,
+});
+
+export const config = {
+  runtime: 'edge',
+};
+
+export default async function handler(req) {
+  if (req.method !== 'POST') {
+    return new Response('Method Not Allowed', { status: 405 });
+  }
 
   try {
-    const { Blob } = await import('@vercel/blob');
-
-    const { enctoken } = req.body;
-    if (!enctoken) return res.status(400).json({ error: 'enctoken required' });
-
-    let tokens = [];
-    try {
-      const blob = await Blob.get(TOKEN_BLOB_NAME);
-      const text = await blob.text();
-      tokens = JSON.parse(text);
-    } catch {
-      return res.status(404).json({ error: 'No tokens found' });
+    const { enctoken } = await req.json();
+    if (!enctoken) {
+      return new Response(JSON.stringify({ error: 'Encrypted token required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
-    const tokenObj = tokens.find(t => t.enctoken === enctoken);
-    if (!tokenObj) return res.status(404).json({ error: 'Encrypted token invalid' });
+    // Scan all keys? Edge Config does not have a direct list API, so you may want to index tokens differently.
+    // For demo, assume you stored tokens as token => JSON, and also store enctoken as a key if needed.
+    // Otherwise, you might need another approach to verify encrypted tokens.
 
-    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
-
-    if (tokenObj.ip !== ip) {
-      return res.status(403).json({ error: 'IP mismatch' });
+    // For simplicity, try to get by enctoken key:
+    const dataStr = await edgeConfig.get(enctoken);
+    if (!dataStr) {
+      return new Response(JSON.stringify({ valid: false }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
-    res.status(200).json({ valid: true });
+    return new Response(JSON.stringify({ valid: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Internal error' });
+    return new Response(JSON.stringify({ error: e.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
-};
+}
