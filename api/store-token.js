@@ -1,36 +1,39 @@
-const TOKEN_BLOB_NAME = 'tokens.json';
+export const config = {
+  runtime: 'edge',
+};
 
-module.exports = async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).end();
+import { put } from '@vercel/blob';
+import crypto from 'crypto';
 
+export default async function handler(req) {
   try {
-    const { Blob } = await import('@vercel/blob');
+    const { token } = await req.json(); // ✅ parse the request body manually
 
-    const { token } = req.body;
-    if (!token) return res.status(400).json({ error: 'Token required' });
+    if (!token) {
+      return new Response(JSON.stringify({ error: 'Token required' }), { status: 400 });
+    }
 
-    let tokens = [];
-    try {
-      const existingBlob = await Blob.get(TOKEN_BLOB_NAME);
-      const text = await existingBlob.text();
-      tokens = JSON.parse(text);
-    } catch {}
+    const enctoken = crypto.createHash('sha256').update(token).digest('hex');
 
-    const enctoken = Buffer.from(token).toString('base64');
-
-    tokens.push({
+    const data = {
       token,
       status: 'unused',
       ip: '',
-      enctoken,
+      enctoken
+    };
+
+    await put(`tokens/${enctoken}.json`, JSON.stringify(data), {
+      access: 'public'
     });
 
-    const newBlob = new Blob([JSON.stringify(tokens)], { type: 'application/json' });
-    await Blob.put(TOKEN_BLOB_NAME, newBlob);
-
-    res.status(200).json({ message: 'Token stored', enctoken });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Internal error' });
+    return new Response(JSON.stringify({ success: true, enctoken }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
-};
+}
